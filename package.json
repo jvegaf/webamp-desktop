@@ -1,6 +1,6 @@
 {
   "name": "webamp-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Desktop version of Winamp 2.9 reimplementation in HTML5 and JS",
   "main": "main.js",
   "targets": {
@@ -12,7 +12,7 @@
     "build": "pnpm copy && pnpm build:src",
     "build:src": "parcel build ./src/index.html --dist-dir dist --public-url ./",
     "electron": "electron .",
-    "copy": "mkdir -p ./dist && cp -r ./bundled/* ./dist",
+    "copy": "node scripts/copy.js",
     "test": "jest",
     "pack": "pnpm pack:win && pnpm pack:linux && pnpm pack:mac",
     "pack:mac": "electron-builder --mac --x64",
@@ -28,6 +28,7 @@
     "electron-is-dev": "^2.0.0",
     "electron-log": "^5.0.0",
     "electron-updater": "^6.1.4",
+    "fs-extra": "^10.1.0",
     "html-to-text": "^9.0.5",
     "left-clicky": "0.1.1",
     "mime-types": "^2.1.35",
