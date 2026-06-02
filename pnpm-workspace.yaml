@@ -1,0 +1,13 @@
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  core-js: true
+  deasync: true
+  electron: true
+  electron-chromedriver: true
+  left-clicky: true
+  lmdb: true
+  msgpackr-extract: true
+  parcel-bundler: true
+  spectron: true
+  yarn: true

@@ -14,7 +14,7 @@ const {
 } = require("electron");
 
 // ----- scale knob (CSS zoom) -----
-let SCALE = Number(process.env.WEBAMP_SCALE || 2); // 1, 1.5, 2, 3...
+let SCALE = Number(process.env.WEBAMP_SCALE || 1.2); // 1, 1.5, 2, 3...
 
 if (isDev) {
   require("electron-debug")({ devToolsMode: "detach" });
@@ -115,7 +115,7 @@ function applyZoom() {
   if (!mainWindow) return;
   mainWindow.webContents.setZoomFactor(SCALE);
   // lock pinch-zoom so UI scale stays consistent
-  mainWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => { });
 }
 
 function applyScaledSize() {
