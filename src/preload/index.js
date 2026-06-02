@@ -16,6 +16,13 @@ contextBridge.exposeInMainWorld("closeElectronWindow", function () {
   ipcRenderer.send("close");
 });
 
+// AIDEV-NOTE: Exposed so the renderer can listen for files opened via OS "Open with...".
+contextBridge.exposeInMainWorld("onOpenFileFromOS", function (callback) {
+  ipcRenderer.on("open-file-from-os", (_event, fileUrl) => {
+    callback(fileUrl);
+  });
+});
+
 const WINAMP_SELECTORS = [
   "#main-window",
   "#equalizer-window",
@@ -48,6 +55,9 @@ function sendResizeToMain() {
 }
 
 contextBridge.exposeInMainWorld("setupRendered", function () {
+  // AIDEV-NOTE: Signal to main that the renderer is ready to receive IPC messages.
+  ipcRenderer.send("renderer-ready");
+
   const setIgnore = (should) => ipcRenderer.send("ignoreMouseEvents", should);
   const setThumbnailClip = (clip) => ipcRenderer.send("setThumbnailClip", clip);
   const getBounds = () => ipcRenderer.invoke("getBounds");

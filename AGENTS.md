@@ -37,6 +37,10 @@ The renderer preload measures the union of `#main-window`, `#equalizer-window`, 
 
 `bundled/` contains skins (`.wsz`) and a sample MP3. `scripts/copy.js` copies them to `dist/` at build time. Skins are referenced by URL in `src/renderer.ts`.
 
+### OS "Open with..." file handling
+
+External audio files opened via the OS context menu use a custom `webamp-file://` protocol (registered in `main.js` via `protocol.handle`). This avoids conflicts with the `file://` interceptor which is scoped to app assets. The CSP in `src/node/protocol.js` must include `webamp-file:` in both `media-src` and `connect-src`. On Windows, the browser normalizes the drive letter to lowercase in the URL host — the handler reconstructs the path using `hostname.toUpperCase()` + `pathname`. Single instance is enforced via `app.requestSingleInstanceLock()`; subsequent launches forward the file path via the `second-instance` event.
+
 ## Key gotchas
 
 - **Linux**: hardware acceleration is disabled in `main.js` for transparency support (Chromium bug). Window creation is delayed 100ms.

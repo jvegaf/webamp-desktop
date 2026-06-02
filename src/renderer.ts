@@ -62,6 +62,21 @@ webamp.renderWhenReady(document.getElementById("app")).then(() => {
   window.setupRendered();
 });
 
+// AIDEV-NOTE: Handle files opened via OS "Open with..." context menu.
+// Replaces the current playlist and starts playback of the selected file.
+window.onOpenFileFromOS((fileUrl: string) => {
+  const fileName = decodeURIComponent(fileUrl.split("/").pop() || "Unknown");
+  webamp.setTracksToPlay([
+    {
+      url: fileUrl,
+      metaData: {
+        artist: "Unknown Artist",
+        title: fileName.replace(/\.mp3$/i, ""),
+      },
+    },
+  ]);
+});
+
 // Expose some webamp API on the window for the main process
 window.webampPlay = function () {
   // @ts-ignore

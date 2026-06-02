@@ -5,6 +5,7 @@ declare global {
         minimizeElectronWindow: () => void
         closeElectronWindow: () => void
         setupRendered: () => void
+        onOpenFileFromOS: (callback: (fileUrl: string) => void) => void
         webampOnTrackDidChange: (track: Track) => void
         webampPlay: () => void
         webampPause: () => void

@@ -1,7 +1,10 @@
 // main.js
 const isDev = require("electron-is-dev");
 const path = require("path");
+const fs = require("fs");
 const url = require("url");
+const { pathToFileURL, fileURLToPath } = require("url");
+const mime = require("mime-types");
 const checkForUpdatesAndNotify = require("./src/node/updates.js");
 const interceptStreamProtocol = require("./src/node/protocol.js");
 const {
@@ -12,6 +15,25 @@ const {
   shell,
   BrowserWindow,
 } = require("electron");
+
+// AIDEV-NOTE: Register custom scheme for serving external audio files.
+// Must be called before app.whenReady().
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "webamp-file",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
+
+// AIDEV-NOTE: File opened from OS "Open with..." context menu.
+// Stored here because the event may fire before the renderer is ready.
+let pendingFileFromOS = null;
 
 // ----- scale knob (CSS zoom) -----
 let SCALE = Number(process.env.WEBAMP_SCALE || 1.2); // 1, 1.5, 2, 3...
@@ -138,6 +160,30 @@ function createWindow() {
     if (err) console.error("Failed to register protocol");
   });
 
+  // AIDEV-NOTE: Custom protocol to serve external audio files opened via OS.
+  // Avoids conflicts with the file:// interceptor which is scoped to app assets.
+  protocol.handle("webamp-file", async (request) => {
+    try {
+      // AIDEV-NOTE: The browser normalizes the URL host to lowercase (e.g. C: → c).
+      // We must reconstruct the path: hostname is the drive letter on Windows,
+      // pathname is the rest of the path.
+      const parsed = new URL(request.url);
+      const filePath =
+        process.platform === "win32"
+          ? `${parsed.hostname.toUpperCase()}:${parsed.pathname}`
+          : parsed.pathname;
+      const data = await fs.promises.readFile(filePath);
+      const contentType =
+        mime.contentType(path.extname(filePath)) || "audio/mpeg";
+      return new Response(data, {
+        headers: { "Content-Type": contentType },
+      });
+    } catch (err) {
+      console.error("[webamp-file] Handler error:", err);
+      return new Response("Not Found", { status: 404 });
+    }
+  });
+
   // Start tiny & hidden; content-size is what counts because of useContentSize
   mainWindow = new BrowserWindow({
     x: 0,
@@ -215,6 +261,9 @@ function createWindow() {
   ipcMain.handle("getBounds", () => mainWindow.getBounds());
   ipcMain.handle("getCursorScreenPoint", () => screen.getCursorScreenPoint());
 
+  // AIDEV-NOTE: Renderer signals it's ready — send any pending file from OS.
+  ipcMain.on("renderer-ready", () => sendPendingFileToRenderer());
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -226,6 +275,74 @@ function createWindow() {
       slashes: true,
     })
   );
+}
+
+// AIDEV-NOTE: Extract .mp3 file path from command-line arguments (Windows/Linux).
+// Returns a webamp-file:// URL string or null.
+// Uses custom scheme to bypass the file:// interceptor (scoped to app assets).
+function extractFileFromArgs(argv) {
+  for (const arg of argv) {
+    if (arg.toLowerCase().endsWith(".mp3")) {
+      const resolved = path.resolve(arg);
+      return pathToFileURL(resolved).href.replace("file://", "webamp-file://");
+    }
+  }
+  return null;
+}
+
+// AIDEV-NOTE: Send the pending file to the renderer, if any.
+// Called after the renderer signals it's ready via setupRendered.
+function sendPendingFileToRenderer() {
+  if (pendingFileFromOS && mainWindow) {
+    mainWindow.webContents.send("open-file-from-os", pendingFileFromOS);
+    pendingFileFromOS = null;
+  }
+}
+
+// AIDEV-NOTE: Single instance lock — ensures only one app window.
+// On Windows/Linux, "Open with..." launches a second instance; we forward
+// the file path to the primary instance via second-instance event.
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, commandLine) => {
+    // Someone tried to run a second instance — focus our window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+      // Check if the second instance was launched with a file
+      const fileUrl = extractFileFromArgs(commandLine);
+      if (fileUrl) {
+        mainWindow.webContents.send("open-file-from-os", fileUrl);
+      }
+    }
+  });
+}
+
+// AIDEV-NOTE: macOS fires open-file when user opens a file via Finder/dock.
+// This event can fire before 'ready', so we must listen early and stash the path.
+app.on("open-file", (event, filePath) => {
+  event.preventDefault();
+  const fileUrl = pathToFileURL(filePath).href.replace(
+    "file://",
+    "webamp-file://"
+  );
+  if (mainWindow) {
+    mainWindow.webContents.send("open-file-from-os", fileUrl);
+  } else {
+    pendingFileFromOS = fileUrl;
+  }
+});
+
+// AIDEV-NOTE: On Windows/Linux, the file path comes via process.argv.
+// Parse it before 'ready' so we can send it once the renderer is ready.
+if (process.platform !== "darwin") {
+  const fileUrl = extractFileFromArgs(process.argv);
+  if (fileUrl) {
+    pendingFileFromOS = fileUrl;
+  }
 }
 
 // Linux transparency quirk handling unchanged
